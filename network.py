@@ -28,9 +28,7 @@ class FCLayer(Layer):
         # print("weights: ", self.weights.shape, input.shape, self.bias.shape)
         # print("OUTPUT: ", np.shape(self.weights), np.shape(input))
         self.output = np.dot(input, self.weights) + self.bias
-
-
-        return self.output
+        return np.squeeze(self.output)
     
     def backward(self, grad_output, learning_rate):
         input_grad = np.dot(grad_output, self.weights.T)
@@ -57,7 +55,9 @@ class ActivationLayer(Layer):
     # learning_rate is not used because there is no "learnable" parameters
     def backward(self, grad_output, learning_rate):
         # print("activation prime input, grad_out: ", (self.activation_prime(self.input) * grad_output).shape)
-        return self.activation_prime(self.input) * grad_output
+        act_prime = self.activation_prime(self.input)
+        res = act_prime * grad_output
+        return res
 
 class SoftMaxLayer:
     def __init__(self):
@@ -104,70 +104,41 @@ class Network:
                 result.append(output)        
                 
         return result
+    
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer.forward(x)
+        return x
 
     def mse(self, y_true, y_pred):
-        # print(np.shape(y_true))
-        n = np.shape(y_true)
-        if n:
-            n = n[0]
-        else:
-            n = 1
-        # print(y_true[0])
-        # print(y_pred[0])
-        err = sum((y_true - y_pred) ** 2)
-        err = (1.0/ n) * err
-        return err
+        err = np.power(y_true - y_pred, 2)
+        return np.mean(err)
 
     def mse_prime(self, y_true, y_pred):
-        # n = np.shape(y_true)
-        # if n:
-        #     n = n[0]
-        # else:
-            # n = 1
-        # n = y_true.shape[0]
         grad_output = 2 * (y_pred - y_true) / 1
         return grad_output
-        
-    # def data_split(self, data, size):
-    #     split_data = []
-    #     n = data.shape[0]
-    #     step = n//size
-    #     if n % size > 0:
-    #         size += 1
-    #     for x in range(0, size, step):
-    #         if  x != size-1:
-    #             split_data.append(data[x:x+step])
-    #         else:
-    #             split_data.append(data[x:])
-    #     print(split_data[0])
-    #     return split_data
 
     def fit(self, x_train, y_train, epochs, learning_rate, batch_size):
         # batches = self.data_split(x_train, batch_size)
         
         for i in range(epochs):
             err = 0.0
-            outputs = []
+            output_list = []
             batches = [x_train[k:k + batch_size] for k in range(0, len(x_train), batch_size)]
             for batch in batches:
                 n_samples = batch.shape[0]
                 for j in range(n_samples):
-                    output = batch[j]
-                    for layer in self.layers:
-                        # print(output)
-                        output = layer.forward(output)
-                    outputs.append(output)
-                    # err += self.loss(y_train[j], output)
-                    for result in output:
+                    sample = batch[j]
+                    output = self.forward(sample)
+                    output_list.append(output)
+                    y_pred = np.argmax(output)
+                    err += self.loss(y_train[j], y_pred)
+                    for output in output_list:
                         grad_out = self.loss_prime(y_train[j], output)
                     for layer in reversed(self.layers):
                         grad_out = layer.backward(grad_out, learning_rate)
-            # err = self.mse(y_train, outputs)
+            # err = self.mse(y_train, output_list)
             # err /= n_samples
             # print(err)
             # print(type(err))
             # print(f'epoch {i+1}/{epochs} error = {err:.3f}')
-
-
-
-
